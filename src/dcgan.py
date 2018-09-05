@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import scipy
 import scipy.ndimage as ndimage
-import imageutils as imgutil
+# import imageutils as imgutil
 from torchvision import  transforms
 
 # def weight_init(self, m):
@@ -72,9 +72,6 @@ class D(nn.Module):
         self.conv4_bn = nn.BatchNorm2d(d*8)
         self.conv5 = nn.Conv2d(d*8, 1, 4, 1, 0)
 
-    # def weight_init(self, mean, std):
-    #     for m in self._modules:
-    #         normal_init(self._modules[m], mean, std)
 
     def forward(self, input):
         x = F.leaky_relu(self.conv1(input), 0.2)
@@ -84,15 +81,6 @@ class D(nn.Module):
         x = F.sigmoid(self.conv5(x))
         # print("D class for x ", x.shape)
         return x # [128 x 1 x  1 x 1]
-
-    # def weight_init(self, m):
-    #     classname = m.__class__.__name__
-    #     if classname.find('Conv') != -1:
-    #         print("weight_init")
-    #         m.weight.data.normal_(0.0, 0.02)
-    #     elif classname.find('BatchNorm') != -1:
-    #         m.weight.data.normal_(1.0, 0.02)
-    #         m.bias.data.fill_(0)
 
     def normal_init(m, mean=0.0, std=0.02):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):

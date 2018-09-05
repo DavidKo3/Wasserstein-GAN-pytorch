@@ -21,7 +21,9 @@ def plot_result(G, fixed_noise, image_size, num_iter, num_epoch, save_dir, fig_s
     G.train()
 
     n_rows = n_cols = 5
+    print("rrrr ")
     fig, axes = plt.subplots(n_rows, n_cols, figsize=fig_size)
+    print("eee")
 
     for ax, img in zip(axes.flatten(), generate_images):
         ax.axis('off')
