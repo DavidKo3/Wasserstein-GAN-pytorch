@@ -35,7 +35,7 @@ parser.add_argument('--outf', default='./results', help='folder to output images
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
 parser.add_argument('--clamp_upper', type=float, default=0.01)
-parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
+parser.add_argument('--rmsprop', action='store_true', help='Whether to use adam (default is rmsprop)')
 parser.add_argument('--Diters', type=int, default=5, help='number of D iters per each G iter')
 opt = parser.parse_args()
 
@@ -239,6 +239,9 @@ print("training begin !!")
 
 num_iter = 0
 start_time = time.time()
+def gradClamp(parameters, clip=0.01):
+    for p in parameters:
+        p.data.clamp_(-clip, clip)
 
 for epoch in range(num_epochs):
     D_losses = []
@@ -284,25 +287,14 @@ for epoch in range(num_epochs):
             D_x = D_real_loss.data.mean()
 
 
-    
-            # train discriminator with fake (log(1 - D(G(z)))
-            z = torch.randn((mini_batch, 100)).view(-1, 100, 1, 1) # [x, 100] -> [x, 100, 1 , 1]
-            z = Variable(z.cuda()) # [128 x 100 x 1 x 1]
-
-
-            D_fake_decision = D(G(z)).squeeze()  # D(G(z))
-
-            D_fake_loss = BCE_loss(D_fake_decision, y_fake)
-            # D_fake_loss.backward()
-            D_G_z1 = D_fake_loss.data.mean()
-
 
             # Back propagation
-            D_loss = D_real_loss + D_fake_loss   # log(D(x)) + log(1- D(G(z))
+            D_loss = D_real_loss    # log(D(x))
             D.zero_grad()
-            G.zero_grad()
+
             D_loss.backward()
             D_optimizer.step()
+            gradClamp(D.parameters(), 0.01)
 
             ############################
             # (2) Update G network: maximize log(D(G(z)))
