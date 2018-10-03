@@ -27,7 +27,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--lr', type=float, default=0.0002, help='learning rate, default=0.0002')
+parser.add_argument('--lr', type=float, default=0.00005, help='learning rate, default=0.00005')
 parser.add_argument('--niter', type=int, default=25, help='number of epoch to train for')
 parser.add_argument('--batchSize', type=int, default=128, help='input batch size')
 parser.add_argument('--manualseed', type=int, help='manual seed')
@@ -219,13 +219,13 @@ BCE_loss = nn.BCELoss().cuda()
 
 
 # setup optimizer
-if opt.adam:
-    D_optimizer = optim.Adam(D.parameters(), lr=opt.lrD, betas=(0.5, 0.999))
-    G_optimizer = optim.Adam(G.parameters(), lr=opt.lrG, betas=(0.5, 0.999))
-else:
-    D_optimizer = optim.RMSprop(D.parameters(), lr = opt.lr)
-    G_optimizer = optim.RMSprop(G.parameters(), lr = opt.lr)
-
+if opt.rmsprop:
+    D_optimizer = optim.RMSprop(D.parameters(), lr= opt.lr)
+    G_optimizer = optim.RMSprop(G.parameters(), lr= opt.lr)
+#
+# else:
+#     D_optimizer = optim.Adam(D.parameters(), lr=opt.lrD, betas=(0.5, 0.999))
+#     G_optimizer = optim.Adam(G.parameters(), lr=opt.lrG, betas=(0.5, 0.999))
 
 
 # train_hist = {}
@@ -243,7 +243,17 @@ def gradClamp(parameters, clip=0.01):
     for p in parameters:
         p.data.clamp_(-clip, clip)
 
+
+gen_iter = 0
+disc_iter = 5
+one = torch.FloatTensor([1])
+mine_one = one * -1
+
+one, mine_one = one.cuda(), mine_one.cuda()
+
 for epoch in range(num_epochs):
+    data_iter= iter(train_loader)
+
     D_losses = []
     G_losses = []
 
@@ -259,6 +269,80 @@ for epoch in range(num_epochs):
         print("learning rate change!")
 
     epoch_start_time = time.time()
+    i = 0
+
+
+    while i < len(train_loader):
+        # train discriminator D
+        ############################
+        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        ###########################
+        # train with real (log(D(x)))
+        for d in D.parameters():
+            d.requires_grad = True
+
+        if gen_iter < 30 or gen_iter % 500 == 0:
+            disc_iter = 100
+        else :
+            disc_iter = 5
+
+        j = 0
+        while j < disc_iter and i < len(train_loader):
+            j += 1
+            gradClamp(D.parameters(), 0.01)
+
+            data = data_iter.next()
+            i+=1
+
+            # train discriminator D
+            ############################
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+            ###########################
+            # train with real (log(D(x)))
+
+            mini_batch = data.size()[0]  # len of train_loader
+            D.zero_grad()
+
+
+            x_= Variable(data.cuda())
+
+            # Back propagation
+            D_loss = D(x_)# log(D(x))
+            print("D_loss ,", D_loss)
+            print("D_loss shape ", D_loss.size())
+            D_loss = D_loss.squeeze()
+            print("D_loss shape ", D_loss.size())
+            one = torch.ones(mini_batch).cuda()
+            D_loss.backward(one)
+
+            # train with fake
+            z = torch.randn((mini_batch, 100)).view(-1, 100, 1, 1) # [mini_batch x 100] - > [mini_batch x 100 x 1 x 1]
+
+            with torch.no_grad():
+                z = Variable(z.cuda()) # freezing G
+
+
+            gen_image = D(G(z))
+            print("ge_imagse size ", gen_image.size())
+            G_loss = gen_image
+            G_loss = G_loss.squeeze()
+            print("G_loss size ", G_loss.size())
+            mone = one*(-1)
+            G_loss.backward(mone)
+
+            errD = D_loss - G_loss
+
+        ## END of while
+
+        ############################
+        # (2) Update G network: maximize log(D(G(z)))
+        ###########################
+        for p in D.parameters():
+            p.requires_grad= False # to avoid computation
+
+        G.zero_grad()
+
+
 
 
     for j, y_ in enumerate(train_loader, 0):
@@ -293,6 +377,10 @@ for epoch in range(num_epochs):
             D.zero_grad()
 
             D_loss.backward()
+
+
+
+
             D_optimizer.step()
             gradClamp(D.parameters(), 0.01)
 
@@ -302,7 +390,8 @@ for epoch in range(num_epochs):
             # train generator G
             z = torch.randn((mini_batch, 100)).view(-1, 100, 1, 1) # [mini_batch x 100] - > [mini_batch x 100 x 1 x 1]
             z = Variable(z.cuda())
-
+            G_loss = G(z)
+            G_loss.backward()
 
             gen_image = G(z) # [128 x 3 x 64 x 64]
 
